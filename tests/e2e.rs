@@ -11,6 +11,7 @@
 use agent_first_config::{add_keyed, get_path, remove_keyed, set_path, Format, KeyedList, Value};
 use std::collections::BTreeMap;
 
+#[cfg(feature = "json")]
 #[test]
 fn test_json_round_trip() {
     let json_str = r#"{"imap": {"host": "mail.example.com", "port": 993}}"#;
@@ -31,6 +32,7 @@ fn test_json_round_trip() {
     assert_eq!(port.as_integer().unwrap(), 587);
 }
 
+#[cfg(feature = "toml")]
 #[test]
 fn test_toml_round_trip() {
     let toml_str = r#"
@@ -53,6 +55,7 @@ port = 5432
     assert_eq!(port.as_integer().unwrap(), 3306);
 }
 
+#[cfg(feature = "yaml")]
 #[test]
 fn test_yaml_round_trip() {
     let yaml_str = r#"
@@ -131,6 +134,7 @@ fn test_keyed_list_add_and_remove() {
     assert_eq!(bob_email.as_str().unwrap(), "bob@example.com");
 }
 
+#[cfg(feature = "json")]
 #[test]
 fn test_greedy_key_matching() {
     let json_str = r#"{"actions":{"case.add":{"steps":[{"move":"archive"}]}}}"#;
@@ -254,16 +258,28 @@ fn test_error_on_nonexistent_slug() {
     assert!(result.is_err());
 }
 
+#[cfg(feature = "json")]
 #[test]
-fn test_format_detection() {
+fn test_format_detection_json() {
     assert_eq!(
         Format::detect(std::path::Path::new("config.json")),
         Some(Format::Json)
     );
+    assert_eq!(Format::detect(std::path::Path::new("config.txt")), None);
+}
+
+#[cfg(feature = "toml")]
+#[test]
+fn test_format_detection_toml() {
     assert_eq!(
         Format::detect(std::path::Path::new("config.toml")),
         Some(Format::Toml)
     );
+}
+
+#[cfg(feature = "yaml")]
+#[test]
+fn test_format_detection_yaml() {
     assert_eq!(
         Format::detect(std::path::Path::new("config.yaml")),
         Some(Format::Yaml)
@@ -272,9 +288,9 @@ fn test_format_detection() {
         Format::detect(std::path::Path::new("config.yml")),
         Some(Format::Yaml)
     );
-    assert_eq!(Format::detect(std::path::Path::new("config.txt")), None);
 }
 
+#[cfg(feature = "json")]
 #[test]
 fn test_file_operations() {
     use std::fs;
