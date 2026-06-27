@@ -1,0 +1,2 @@
+# Lint configuration
+cognitive-complexity-threshold = 25

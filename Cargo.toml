@@ -1,0 +1,67 @@
+[package]
+name = "agent-first-config"
+version = "0.1.0"
+edition = "2021"
+description = "Generic dot-path accessor for JSON/TOML/YAML configs, usable both as a **Rust library** and as a standalone **`afconfig` CLI binary**. The library is the primary interface: spores embed it to get `get_key`/`set_key` without writing a dispatch table per field. The CLI wraps the same logic for shell scripts and quick one-off edits from any language."
+license = "MIT"
+repository = "https://github.com/agentfirstkit/agent-first-config"
+exclude = [".github/"]
+
+[lib]
+name = "agent_first_config"
+
+[[bin]]
+name = "afconfig"
+path = "src/bin/afconfig.rs"
+required-features = ["cli"]
+
+[features]
+default = ["json"]
+json = ["dep:serde_json"]
+toml = ["dep:toml", "dep:toml_edit"]
+yaml = ["dep:serde_yaml"]
+schema = []
+cli = ["dep:clap", "dep:agent-first-data", "json", "toml", "yaml", "schema"]
+
+[dependencies]
+serde = { version = "1", features = ["derive"] }
+
+[dependencies.serde_json]
+version = "1"
+optional = true
+# No extra features on purpose: Cargo unifies features across the whole graph,
+# so anything enabled here is forced onto every consumer's own serde_json. The
+# Value IR collapses numbers to i64/f64 and uses a sorted BTreeMap, so neither
+# `arbitrary_precision` nor `preserve_order` would buy afconfig anything — they
+# would only bloat consumers' `serde_json::Value`.
+
+[dependencies.toml]
+version = "1"
+optional = true
+
+[dependencies.toml_edit]
+version = "0.25"
+optional = true
+
+[dependencies.serde_yaml]
+version = "0.9"
+optional = true
+
+[dependencies.clap]
+version = "4"
+features = ["derive"]
+optional = true
+
+[dependencies.agent-first-data]
+version = "0.14"
+optional = true
+
+[dev-dependencies]
+tempfile = "3"
+
+[lints.clippy]
+unwrap_used = "deny"
+expect_used = "deny"
+panic = "deny"
+print_stdout = "deny"
+print_stderr = "deny"

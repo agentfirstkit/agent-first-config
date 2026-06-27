@@ -1,0 +1,37 @@
+{
+  "$schema": "https://cmn.dev/schemas/v1/spore-core.json",
+  "id": "agent-first-config",
+  "name": "Agent-First Config",
+  "version": "0.1.0",
+  "domain": "agentfirstkit.com",
+  "key": "ed25519.BwbSzqdDYyMN1pPW5snRk3afrJAovHn8aueMvDpfNKVw",
+  "synopsis": "Generic dot-path accessor for JSON/TOML/YAML configs, usable both as a **Rust library** and as a standalone **`afconfig` CLI binary**. The library is the primary interface: spores embed it to get `get_key`/`set_key` without writing a dispatch table per field. The CLI wraps the same logic for shell scripts and quick one-off edits from any language.",
+  "intent": [
+    "Provide a reusable config traversal and mutation library that works with any serde struct",
+    "Enable dot-path get/set operations (e.g., imap.host, identities.me.email) without enumeration in Clap",
+    "Support slug-based array access (keyed lists) alongside nested object and scalar paths",
+    "Keep the lib lightweight with zero format dependencies; format backends via feature flags",
+    "Solve the consistency problem in multi-format tools where config CLI patterns diverge"
+  ],
+  "license": "MIT",
+  "mutations": [
+    "Provide dot-path get/set/add/remove for JSON, TOML, and YAML config files via both a Rust library and a standalone afconfig CLI binary",
+    "Route keyed-list arrays by element slug (e.g. identities.me.email) and by numeric index (e.g. steps.0.move_to_mailbox_id), with numeric index taking priority",
+    "Accept an optional seed template in add_keyed so new keyed-list entries inherit default field values, overridden by explicit fields",
+    "Simplify add_scalar, remove_scalar, and remove_path by removing the unused keyed_lists parameter from their signatures",
+    "Expose CliSchema trait for generating markdown reference docs and annotated TOML/YAML config files from field definitions",
+    "Coerce CLI string arguments to typed values by shape with s:, b:, i:, j: prefix overrides for forced types"
+  ],
+  "bonds": [],
+  "tree": {
+    "algorithm": "blob_tree_blake3_nfc",
+    "exclude_names": [
+      ".git",
+      ".cmn",
+      "target"
+    ],
+    "follow_rules": [
+      ".gitignore"
+    ]
+  }
+}
