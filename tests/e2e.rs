@@ -1,3 +1,4 @@
+#![cfg(any(feature = "json", feature = "toml", feature = "yaml"))]
 #![allow(
     clippy::unwrap_used,
     clippy::panic,

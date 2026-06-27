@@ -1,4 +1,5 @@
 //! afconfig CLI binary — dot-path config accessor for JSON/TOML/YAML files.
+#![allow(clippy::print_stdout, clippy::print_stderr)]
 
 use agent_first_config::{ConfigError, ConfigResult, Format, KeyedList};
 use clap::{Parser, Subcommand};
