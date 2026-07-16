@@ -1531,16 +1531,22 @@ fn test_afconfig_cli_protocol_and_secret_boundaries() {
     assert_eq!(show["result"]["value"]["password_secret"], "***");
     assert_eq!(show["result"]["value"]["nested"]["API_KEY"], "***");
 
-    let redirected = temp_dir.path().join("raw.out");
-    let output = Command::new(env!("CARGO_BIN_EXE_afconfig"))
-        .args(["--stdout-file", redirected.to_str().unwrap()])
-        .arg(&config_path)
-        .args(["get", "multi", "--value-only"])
-        .output()
-        .unwrap();
-    assert!(output.status.success());
-    assert!(output.stdout.is_empty());
-    assert_eq!(std::fs::read(redirected).unwrap(), b"a\nb\n");
+    // stream_redirect (--stdout-file / --stderr-file) is a Unix-only afdata
+    // feature; on non-Unix `install` reports unsupported and afconfig exits
+    // non-zero, so exercise the redirect only on Unix.
+    #[cfg(unix)]
+    {
+        let redirected = temp_dir.path().join("raw.out");
+        let output = Command::new(env!("CARGO_BIN_EXE_afconfig"))
+            .args(["--stdout-file", redirected.to_str().unwrap()])
+            .arg(&config_path)
+            .args(["get", "multi", "--value-only"])
+            .output()
+            .unwrap();
+        assert!(output.status.success());
+        assert!(output.stdout.is_empty());
+        assert_eq!(std::fs::read(redirected).unwrap(), b"a\nb\n");
+    }
 
     for output_format in ["yaml", "plain"] {
         let output = Command::new(env!("CARGO_BIN_EXE_afconfig"))
