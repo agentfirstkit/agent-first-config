@@ -1,6 +1,6 @@
 //! Core dot-path traversal for get/set operations.
 
-use crate::{keyed::KeyedList, ConfigError, ConfigResult, Value};
+use crate::{ConfigError, ConfigResult, Value, keyed::KeyedList, path::parse_path};
 
 /// Get a value at the given dot-path.
 ///
@@ -8,18 +8,22 @@ use crate::{keyed::KeyedList, ConfigError, ConfigResult, Value};
 /// - Object field access (any level of nesting)
 /// - KeyedList access (Vec<T> slug routing)
 /// - Greedy key matching for keys containing '.'
-pub fn get_path(root: &Value, path: &str, keyed_lists: &[KeyedList]) -> ConfigResult<Value> {
+pub fn get_path_ref<'a>(
+    root: &'a Value,
+    path: &str,
+    keyed_lists: &[KeyedList<'_>],
+) -> ConfigResult<&'a Value> {
     if path.is_empty() {
         return Err(ConfigError::EmptyPath);
     }
 
-    let segments: Vec<&str> = path.split('.').collect();
+    let segments = parse_path(path)?;
     let mut current = root;
     let mut accumulated_prefix = String::new();
     let mut seg_idx = 0;
 
     while seg_idx < segments.len() {
-        let current_seg = segments[seg_idx];
+        let current_seg = segments[seg_idx].as_str();
 
         match current {
             Value::Object(obj) => {
@@ -32,27 +36,10 @@ pub fn get_path(root: &Value, path: &str, keyed_lists: &[KeyedList]) -> ConfigRe
                     current = next;
                     seg_idx += 1;
                 } else {
-                    // Try greedy extension (current_seg.next_seg)
-                    let mut found = false;
-                    if seg_idx + 1 < segments.len() {
-                        let extended = format!("{}.{}", current_seg, segments[seg_idx + 1]);
-                        if let Some(next) = obj.get(&extended) {
-                            if !accumulated_prefix.is_empty() {
-                                accumulated_prefix.push('.');
-                            }
-                            accumulated_prefix.push_str(&extended);
-                            current = next;
-                            seg_idx += 2;
-                            found = true;
-                        }
-                    }
-
-                    if !found {
-                        return Err(ConfigError::UnknownSegment {
-                            path: path.to_string(),
-                            segment: current_seg.to_string(),
-                        });
-                    }
+                    return Err(ConfigError::UnknownSegment {
+                        path: path.to_string(),
+                        segment: current_seg.to_string(),
+                    });
                 }
             }
             Value::Array(arr) => {
@@ -74,7 +61,7 @@ pub fn get_path(root: &Value, path: &str, keyed_lists: &[KeyedList]) -> ConfigRe
                 } else {
                     let registration = keyed_lists
                         .iter()
-                        .find(|kl| kl.prefix == accumulated_prefix)
+                        .find(|kl| keyed_prefix_matches(kl, &accumulated_prefix))
                         .ok_or_else(|| ConfigError::UnregisteredArray {
                             path: accumulated_prefix.clone(),
                         })?;
@@ -113,7 +100,12 @@ pub fn get_path(root: &Value, path: &str, keyed_lists: &[KeyedList]) -> ConfigRe
         }
     }
 
-    Ok(current.clone())
+    Ok(current)
+}
+
+/// Get a cloned value at the given dot-path.
+pub fn get_path(root: &Value, path: &str, keyed_lists: &[KeyedList<'_>]) -> ConfigResult<Value> {
+    Ok(get_path_ref(root, path, keyed_lists)?.clone())
 }
 
 /// Set a value at the given dot-path, coercing the CLI strings toward the type
@@ -123,48 +115,37 @@ pub fn set_path(
     root: &mut Value,
     path: &str,
     values: &[String],
-    keyed_lists: &[KeyedList],
+    keyed_lists: &[KeyedList<'_>],
 ) -> ConfigResult<()> {
     if path.is_empty() {
         return Err(ConfigError::EmptyPath);
     }
 
-    let segments: Vec<&str> = path.split('.').collect();
+    let segments = parse_path(path)?;
     set_path_recursive(root, &segments, 0, &mut String::new(), keyed_lists, values)
 }
 
 fn set_path_recursive(
     current: &mut Value,
-    segments: &[&str],
+    segments: &[String],
     idx: usize,
     accumulated_prefix: &mut String,
-    keyed_lists: &[KeyedList],
+    keyed_lists: &[KeyedList<'_>],
     values: &[String],
 ) -> ConfigResult<()> {
     if idx >= segments.len() {
         return Err(ConfigError::EmptyPath);
     }
 
-    let current_seg = segments[idx];
+    let current_seg = segments[idx].as_str();
     let is_last = idx == segments.len() - 1;
 
     match current {
-        Value::Object(ref mut obj) => {
-            // Determine which key to use (exact match or greedy extension)
-            let key_to_use = if obj.contains_key(current_seg) {
-                current_seg.to_string()
-            } else if idx + 1 < segments.len() {
-                let extended = format!("{}.{}", current_seg, segments[idx + 1]);
-                if obj.contains_key(&extended) {
-                    extended
-                } else {
-                    current_seg.to_string()
-                }
-            } else {
-                current_seg.to_string()
-            };
+        Value::Object(obj) => {
+            // Path parsing makes dotted keys explicit via `\\.`.
+            let key_to_use = current_seg.to_string();
 
-            let segments_to_consume = if key_to_use.contains('.') { 2 } else { 1 };
+            let segments_to_consume = 1;
 
             if is_last {
                 // At leaf: coerce toward the type already stored here, then set.
@@ -212,7 +193,7 @@ fn set_path_recursive(
                 }
             }
         }
-        Value::Array(ref mut arr) => {
+        Value::Array(arr) => {
             // Numeric index takes priority over keyed-list slug.
             if let Ok(arr_idx) = current_seg.parse::<usize>() {
                 if arr_idx >= arr.len() {
@@ -242,7 +223,7 @@ fn set_path_recursive(
             } else {
                 let registration = keyed_lists
                     .iter()
-                    .find(|kl| kl.prefix == accumulated_prefix.as_str())
+                    .find(|kl| keyed_prefix_matches(kl, accumulated_prefix))
                     .ok_or_else(|| ConfigError::UnregisteredArray {
                         path: accumulated_prefix.clone(),
                     })?;
@@ -267,17 +248,13 @@ fn set_path_recursive(
                     })?;
 
                 if is_last {
-                    if let Some(elem_obj) = arr[elem_idx].as_object_mut() {
-                        let new_value =
-                            crate::coerce::coerce_values_typed(values, elem_obj.get(slug))?;
-                        elem_obj.insert(slug.to_string(), new_value);
-                        Ok(())
-                    } else {
-                        Err(ConfigError::NotTraversable {
-                            path: slug.to_string(),
-                            got: format!("{:?}", arr[elem_idx]),
-                        })
-                    }
+                    Err(ConfigError::UnsupportedOperation {
+                        format: "keyed list".to_string(),
+                        operation: "set".to_string(),
+                        detail:
+                            "a keyed-list slug resolves to an element; set a child field instead"
+                                .to_string(),
+                    })
                 } else {
                     accumulated_prefix.push('.');
                     accumulated_prefix.push_str(slug);
@@ -299,18 +276,25 @@ fn set_path_recursive(
     }
 }
 
+fn keyed_prefix_matches(registration: &KeyedList<'_>, semantic_prefix: &str) -> bool {
+    registration.prefix == semantic_prefix
+        || crate::parse_path(registration.prefix)
+            .ok()
+            .is_some_and(|segments| segments.join(".") == semantic_prefix)
+}
+
 /// Append scalar values to an existing (or absent) array at the given dot-path.
 pub fn add_scalar(root: &mut Value, path: &str, values: &[String]) -> ConfigResult<()> {
     if path.is_empty() {
         return Err(ConfigError::EmptyPath);
     }
-    let segments: Vec<&str> = path.split('.').collect();
+    let segments = parse_path(path)?;
     add_scalar_recursive(root, &segments, 0, &mut String::new(), values)
 }
 
 fn add_scalar_recursive(
     current: &mut Value,
-    segments: &[&str],
+    segments: &[String],
     idx: usize,
     accumulated_prefix: &mut String,
     values: &[String],
@@ -318,24 +302,13 @@ fn add_scalar_recursive(
     if idx >= segments.len() {
         return Err(ConfigError::EmptyPath);
     }
-    let current_seg = segments[idx];
+    let current_seg = segments[idx].as_str();
     let is_last = idx == segments.len() - 1;
 
     match current {
-        Value::Object(ref mut obj) => {
-            let key_to_use = if obj.contains_key(current_seg) {
-                current_seg.to_string()
-            } else if idx + 1 < segments.len() {
-                let extended = format!("{}.{}", current_seg, segments[idx + 1]);
-                if obj.contains_key(&extended) {
-                    extended
-                } else {
-                    current_seg.to_string()
-                }
-            } else {
-                current_seg.to_string()
-            };
-            let segments_to_consume = if key_to_use.contains('.') { 2 } else { 1 };
+        Value::Object(obj) => {
+            let key_to_use = current_seg.to_string();
+            let segments_to_consume = 1;
 
             if is_last {
                 let arr = obj
@@ -396,13 +369,13 @@ pub fn remove_scalar(root: &mut Value, path: &str, values: &[String]) -> ConfigR
     if path.is_empty() {
         return Err(ConfigError::EmptyPath);
     }
-    let segments: Vec<&str> = path.split('.').collect();
+    let segments = parse_path(path)?;
     remove_scalar_recursive(root, &segments, 0, &mut String::new(), values)
 }
 
 fn remove_scalar_recursive(
     current: &mut Value,
-    segments: &[&str],
+    segments: &[String],
     idx: usize,
     accumulated_prefix: &mut String,
     values: &[String],
@@ -410,24 +383,13 @@ fn remove_scalar_recursive(
     if idx >= segments.len() {
         return Err(ConfigError::EmptyPath);
     }
-    let current_seg = segments[idx];
+    let current_seg = segments[idx].as_str();
     let is_last = idx == segments.len() - 1;
 
     match current {
-        Value::Object(ref mut obj) => {
-            let key_to_use = if obj.contains_key(current_seg) {
-                current_seg.to_string()
-            } else if idx + 1 < segments.len() {
-                let extended = format!("{}.{}", current_seg, segments[idx + 1]);
-                if obj.contains_key(&extended) {
-                    extended
-                } else {
-                    current_seg.to_string()
-                }
-            } else {
-                current_seg.to_string()
-            };
-            let segments_to_consume = if key_to_use.contains('.') { 2 } else { 1 };
+        Value::Object(obj) => {
+            let key_to_use = current_seg.to_string();
+            let segments_to_consume = 1;
 
             if is_last {
                 if let Some(arr) = obj.get_mut(&key_to_use) {
@@ -474,39 +436,28 @@ pub fn remove_path(root: &mut Value, path: &str) -> ConfigResult<()> {
     if path.is_empty() {
         return Err(ConfigError::EmptyPath);
     }
-    let segments: Vec<&str> = path.split('.').collect();
+    let segments = parse_path(path)?;
     remove_path_recursive(root, &segments, 0, &mut String::new())
 }
 
 fn remove_path_recursive(
     current: &mut Value,
-    segments: &[&str],
+    segments: &[String],
     idx: usize,
     accumulated_prefix: &mut String,
 ) -> ConfigResult<()> {
     if idx >= segments.len() {
         return Err(ConfigError::EmptyPath);
     }
-    let current_seg = segments[idx];
+    let current_seg = segments[idx].as_str();
     let is_last = idx == segments.len() - 1;
 
     match current {
-        Value::Object(ref mut obj) => {
-            let key_to_use = if obj.contains_key(current_seg) {
-                current_seg.to_string()
-            } else if idx + 1 < segments.len() {
-                let extended = format!("{}.{}", current_seg, segments[idx + 1]);
-                if obj.contains_key(&extended) {
-                    extended
-                } else {
-                    current_seg.to_string()
-                }
-            } else {
-                current_seg.to_string()
-            };
-            let segments_to_consume = if key_to_use.contains('.') { 2 } else { 1 };
+        Value::Object(obj) => {
+            let key_to_use = current_seg.to_string();
+            let segments_to_consume = 1;
 
-            if is_last || (segments_to_consume == 2 && idx + 2 >= segments.len()) {
+            if is_last {
                 if obj.remove(&key_to_use).is_none() {
                     return Err(ConfigError::PathNotFound { path: key_to_use });
                 }
@@ -526,7 +477,7 @@ fn remove_path_recursive(
                 }
             }
         }
-        Value::Array(ref mut arr) => {
+        Value::Array(arr) => {
             if let Ok(arr_idx) = current_seg.parse::<usize>() {
                 if arr_idx >= arr.len() {
                     return Err(ConfigError::IndexOutOfBounds {

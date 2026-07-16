@@ -49,6 +49,11 @@ pub enum ConfigError {
     IoError {
         detail: String,
     },
+    UnsupportedOperation {
+        format: String,
+        operation: String,
+        detail: String,
+    },
 }
 
 impl fmt::Display for ConfigError {
@@ -103,6 +108,11 @@ impl fmt::Display for ConfigError {
             ConfigError::IoError { detail } => {
                 write!(f, "io error: {}", detail)
             }
+            ConfigError::UnsupportedOperation {
+                format,
+                operation,
+                detail,
+            } => write!(f, "{} does not support {}: {}", format, operation, detail),
         }
     }
 }

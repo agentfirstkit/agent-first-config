@@ -10,33 +10,50 @@ use crate::{ConfigError, ConfigResult, Value};
 ///
 /// Returns `None` when `s` carries no recognized prefix, so the caller can apply
 /// its own (typed or shape-based) coercion.
-fn explicit_prefix(s: &str) -> Option<Value> {
+fn explicit_prefix(s: &str) -> ConfigResult<Option<Value>> {
     if let Some(rest) = s.strip_prefix("s:") {
-        return Some(Value::String(rest.to_string()));
+        return Ok(Some(Value::String(rest.to_string())));
     }
     if let Some(rest) = s.strip_prefix("b:") {
-        return Some(Value::Bool(matches!(
-            rest.to_lowercase().as_str(),
-            "true" | "yes" | "on" | "1"
-        )));
+        let value = parse_bool(rest).ok_or_else(|| ConfigError::ParseError {
+            format: "boolean".to_string(),
+            detail: format!(
+                "invalid b: value `{rest}`; expected true/false, yes/no, on/off, or 1/0"
+            ),
+        })?;
+        return Ok(Some(Value::Bool(value)));
     }
     if let Some(rest) = s.strip_prefix("i:") {
-        return Some(
-            rest.parse::<i64>()
-                .map(Value::Integer)
-                .unwrap_or_else(|_| Value::String(s.to_string())),
-        );
+        return rest
+            .parse::<i64>()
+            .map(Value::Integer)
+            .map(Some)
+            .map_err(|_| ConfigError::ParseError {
+                format: "integer".to_string(),
+                detail: format!("invalid i: value `{rest}`"),
+            });
     }
-    if let Some(_rest) = s.strip_prefix("j:") {
+    if let Some(rest) = s.strip_prefix("j:") {
         #[cfg(feature = "json")]
         {
-            if let Ok(v) = serde_json::from_str::<serde_json::Value>(_rest) {
-                return Some(Value::from(v));
-            }
+            let value = serde_json::from_str::<serde_json::Value>(rest).map_err(|error| {
+                ConfigError::ParseError {
+                    format: "JSON".to_string(),
+                    detail: error.to_string(),
+                }
+            })?;
+            return Ok(Some(Value::from(value)));
         }
-        return Some(Value::String(s.to_string()));
+        #[cfg(not(feature = "json"))]
+        {
+            return Err(ConfigError::UnsupportedOperation {
+                format: "core".to_string(),
+                operation: "j: coercion".to_string(),
+                detail: format!("requires the json feature (input length {})", rest.len()),
+            });
+        }
     }
-    None
+    Ok(None)
 }
 
 /// A bare scalar with no type context: parse an explicit `[...]`/`{...}` JSON
@@ -61,29 +78,32 @@ fn json_or_string(s: &str) -> Value {
 /// deserialize step produces a precise error); when the target is absent/null or
 /// a container, only an explicit JSON literal is structured, otherwise it stays a
 /// String.
-pub fn coerce_scalar_typed(s: &str, existing: Option<&Value>) -> Value {
-    if let Some(v) = explicit_prefix(s) {
-        return v;
+pub fn coerce_scalar_typed(s: &str, existing: Option<&Value>) -> ConfigResult<Value> {
+    if let Some(v) = explicit_prefix(s)? {
+        return Ok(v);
     }
     if s.eq_ignore_ascii_case("null") {
-        return Value::Null;
+        return Ok(Value::Null);
     }
     match existing {
-        Some(Value::Bool(_)) => s
-            .parse::<bool>()
+        Some(Value::Bool(_)) => Ok(parse_bool(s)
             .map(Value::Bool)
-            .unwrap_or_else(|_| Value::String(s.to_string())),
-        Some(Value::Integer(_)) => s
+            .unwrap_or_else(|| Value::String(s.to_string()))),
+        Some(Value::Integer(_)) => Ok(s
             .parse::<i64>()
             .map(Value::Integer)
-            .unwrap_or_else(|_| Value::String(s.to_string())),
-        Some(Value::Float(_)) => s
+            .unwrap_or_else(|_| Value::String(s.to_string()))),
+        Some(Value::Float(_)) => Ok(s
             .parse::<f64>()
             .map(Value::Float)
-            .unwrap_or_else(|_| Value::String(s.to_string())),
-        Some(Value::String(_)) => Value::String(s.to_string()),
-        Some(_) => json_or_string(s),
-        None => coerce_scalar(s),
+            .unwrap_or_else(|_| Value::String(s.to_string()))),
+        Some(Value::Unsigned(_)) => Ok(s
+            .parse::<u64>()
+            .map(Value::Unsigned)
+            .unwrap_or_else(|_| Value::String(s.to_string()))),
+        Some(Value::String(_)) => Ok(Value::String(s.to_string())),
+        Some(_) => Ok(json_or_string(s)),
+        None => Ok(coerce_scalar(s)),
     }
 }
 
@@ -98,14 +118,14 @@ pub fn coerce_values_typed(values: &[String], existing: Option<&Value>) -> Confi
         return Err(ConfigError::EmptyValues);
     }
     if values.len() == 1 {
-        return Ok(coerce_scalar_typed(&values[0], existing));
+        return coerce_scalar_typed(&values[0], existing);
     }
     let elem = existing.and_then(Value::as_array).and_then(|a| a.first());
     Ok(Value::Array(
         values
             .iter()
             .map(|v| coerce_scalar_typed(v, elem))
-            .collect(),
+            .collect::<ConfigResult<Vec<_>>>()?,
     ))
 }
 
@@ -114,7 +134,7 @@ pub fn coerce_values_typed(values: &[String], existing: Option<&Value>) -> Confi
 /// to String. Used where no target type is available (e.g. keyed-list fields
 /// without a default template).
 pub fn coerce_scalar(s: &str) -> Value {
-    if let Some(v) = explicit_prefix(s) {
+    if let Ok(Some(v)) = explicit_prefix(s) {
         return v;
     }
     match s.to_lowercase().as_str() {
@@ -126,10 +146,21 @@ pub fn coerce_scalar(s: &str) -> Value {
     if let Ok(i) = s.parse::<i64>() {
         return Value::Integer(i);
     }
+    if let Ok(u) = s.parse::<u64>() {
+        return Value::Unsigned(u);
+    }
     if let Ok(f) = s.parse::<f64>() {
         return Value::Float(f);
     }
     json_or_string(s)
+}
+
+fn parse_bool(value: &str) -> Option<bool> {
+    match value.to_ascii_lowercase().as_str() {
+        "true" | "yes" | "on" | "1" => Some(true),
+        "false" | "no" | "off" | "0" => Some(false),
+        _ => None,
+    }
 }
 
 /// Coerce a slice of CLI values to Value via shape-based [`coerce_scalar`].

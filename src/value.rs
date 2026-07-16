@@ -2,13 +2,16 @@
 
 use std::collections::BTreeMap;
 
+use serde::{Deserialize, Deserializer, Serialize, Serializer, de};
+
 /// Custom Value IR independent of any format crate.
-/// Supports all formats: JSON, TOML, YAML.
+/// Supports all formats: JSON, TOML, YAML, dotenv, and INI.
 #[derive(Debug, Clone, PartialEq)]
 pub enum Value {
     Null,
     Bool(bool),
     Integer(i64),
+    Unsigned(u64),
     Float(f64),
     String(String),
     Array(Vec<Value>),
@@ -33,12 +36,19 @@ impl Value {
     }
 
     pub fn is_integer(&self) -> bool {
-        matches!(self, Value::Integer(_))
+        matches!(self, Value::Integer(_) | Value::Unsigned(_))
     }
 
     pub fn as_integer(&self) -> Option<i64> {
         match self {
             Value::Integer(i) => Some(*i),
+            _ => None,
+        }
+    }
+
+    pub fn as_unsigned(&self) -> Option<u64> {
+        match self {
+            Value::Unsigned(value) => Some(*value),
             _ => None,
         }
     }
@@ -116,6 +126,7 @@ impl std::fmt::Display for Value {
             Value::Null => write!(f, "null"),
             Value::Bool(b) => write!(f, "{}", b),
             Value::Integer(i) => write!(f, "{}", i),
+            Value::Unsigned(i) => write!(f, "{}", i),
             Value::Float(fl) => write!(f, "{}", fl),
             Value::String(s) => write!(f, "\"{}\"", s.escape_default()),
             Value::Array(_) => write!(f, "[...]"),
@@ -124,7 +135,92 @@ impl std::fmt::Display for Value {
     }
 }
 
-#[cfg(feature = "json")]
+impl Serialize for Value {
+    fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        match self {
+            Value::Null => serializer.serialize_none(),
+            Value::Bool(value) => serializer.serialize_bool(*value),
+            Value::Integer(value) => serializer.serialize_i64(*value),
+            Value::Unsigned(value) => serializer.serialize_u64(*value),
+            Value::Float(value) => serializer.serialize_f64(*value),
+            Value::String(value) => serializer.serialize_str(value),
+            Value::Array(values) => values.serialize(serializer),
+            Value::Object(values) => values.serialize(serializer),
+        }
+    }
+}
+
+impl<'de> Deserialize<'de> for Value {
+    fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        struct ValueVisitor;
+
+        impl<'de> de::Visitor<'de> for ValueVisitor {
+            type Value = Value;
+
+            fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                formatter.write_str("a configuration value")
+            }
+
+            fn visit_unit<E: de::Error>(self) -> Result<Self::Value, E> {
+                Ok(Value::Null)
+            }
+
+            fn visit_none<E: de::Error>(self) -> Result<Self::Value, E> {
+                Ok(Value::Null)
+            }
+
+            fn visit_bool<E: de::Error>(self, value: bool) -> Result<Self::Value, E> {
+                Ok(Value::Bool(value))
+            }
+
+            fn visit_i64<E: de::Error>(self, value: i64) -> Result<Self::Value, E> {
+                Ok(Value::Integer(value))
+            }
+
+            fn visit_u64<E: de::Error>(self, value: u64) -> Result<Self::Value, E> {
+                Ok(Value::Unsigned(value))
+            }
+
+            fn visit_f64<E: de::Error>(self, value: f64) -> Result<Self::Value, E> {
+                Ok(Value::Float(value))
+            }
+
+            fn visit_str<E: de::Error>(self, value: &str) -> Result<Self::Value, E> {
+                Ok(Value::String(value.to_string()))
+            }
+
+            fn visit_string<E: de::Error>(self, value: String) -> Result<Self::Value, E> {
+                Ok(Value::String(value))
+            }
+
+            fn visit_seq<A: de::SeqAccess<'de>>(
+                self,
+                mut access: A,
+            ) -> Result<Self::Value, A::Error> {
+                let mut values = Vec::new();
+                while let Some(value) = access.next_element()? {
+                    values.push(value);
+                }
+                Ok(Value::Array(values))
+            }
+
+            fn visit_map<A: de::MapAccess<'de>>(
+                self,
+                mut access: A,
+            ) -> Result<Self::Value, A::Error> {
+                let mut values = BTreeMap::new();
+                while let Some((key, value)) = access.next_entry()? {
+                    values.insert(key, value);
+                }
+                Ok(Value::Object(values))
+            }
+        }
+
+        deserializer.deserialize_any(ValueVisitor)
+    }
+}
+
+#[cfg(any(feature = "json", feature = "cli"))]
 mod json_convert {
     use super::*;
     use serde_json::json;
@@ -138,7 +234,7 @@ mod json_convert {
                     if let Some(i) = n.as_i64() {
                         Value::Integer(i)
                     } else if let Some(u) = n.as_u64() {
-                        Value::Integer(u as i64)
+                        Value::Unsigned(u)
                     } else {
                         Value::Float(n.as_f64().unwrap_or(0.0))
                     }
@@ -161,12 +257,9 @@ mod json_convert {
                 Value::Null => serde_json::Value::Null,
                 Value::Bool(b) => json!(b),
                 Value::Integer(i) => json!(i),
+                Value::Unsigned(u) => json!(u),
                 Value::Float(f) => {
-                    if f.fract() == 0.0 && f.is_finite() {
-                        json!(f as i64)
-                    } else {
-                        json!(f)
-                    }
+                    json!(f)
                 }
                 Value::String(s) => json!(s),
                 Value::Array(a) => {

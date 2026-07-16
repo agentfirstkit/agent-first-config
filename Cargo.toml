@@ -1,8 +1,9 @@
 [package]
 name = "agent-first-config"
-version = "0.1.0"
-edition = "2021"
-description = "Generic dot-path accessor for JSON/TOML/YAML configs, usable both as a **Rust library** and as a standalone **`afconfig` CLI binary**. The library is the primary interface: spores embed it to get `get_key`/`set_key` without writing a dispatch table per field. The CLI wraps the same logic for shell scripts and quick one-off edits from any language."
+version = "0.2.0"
+edition = "2024"
+rust-version = "1.85"
+description = "Generic dot-path accessor for JSON/TOML/YAML/dotenv/INI configs, usable both as a Rust library and as a standalone afconfig CLI binary. The library is the primary interface: spores embed it for generic dot-path access without writing a dispatch table per field. The CLI wraps the same logic for shell scripts and quick one-off reads or edits from any language."
 license = "MIT"
 repository = "https://github.com/agentfirstkit/agent-first-config"
 exclude = [".github/"]
@@ -16,12 +17,15 @@ path = "src/bin/afconfig.rs"
 required-features = ["cli"]
 
 [features]
-default = ["json"]
+default = ["json", "toml", "yaml", "dotenv", "ini"]
 json = ["dep:serde_json"]
 toml = ["dep:toml", "dep:toml_edit"]
-yaml = ["dep:serde_yaml"]
+yaml = ["dep:noyalib"]
+dotenv = []
+ini = []
 schema = []
-cli = ["dep:clap", "dep:agent-first-data", "json", "toml", "yaml", "schema"]
+cli = ["dep:clap", "dep:serde_json", "dep:agent-first-data", "agent-first-data/stream-redirect"]
+cli-help = ["cli", "agent-first-data/cli-help", "agent-first-data/cli-help-markdown"]
 
 [dependencies]
 serde = { version = "1", features = ["derive"] }
@@ -43,8 +47,9 @@ optional = true
 version = "0.25"
 optional = true
 
-[dependencies.serde_yaml]
-version = "0.9"
+[dependencies.noyalib]
+version = "0.0.13"
+features = ["lossless-u64"]
 optional = true
 
 [dependencies.clap]
@@ -53,10 +58,11 @@ features = ["derive"]
 optional = true
 
 [dependencies.agent-first-data]
-version = "0.14"
+version = "0.17.2"
 optional = true
 
 [dev-dependencies]
+libc = "0.2"
 tempfile = "3"
 
 [lints.clippy]
