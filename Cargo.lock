@@ -20,6 +20,8 @@ dependencies = [
 [[package]]
 name = "agent-first-data"
 version = "0.17.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4944f07d91a7cc669d6a7a95878500e4d8777e8e51e196a52331d0c757ce7cd9"
 dependencies = [
  "chrono",
  "clap",
@@ -1164,11 +1166,3 @@ name = "zmij"
 version = "1.0.23"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "29666d0abbfad1e3dc4dcf6144730dd3a3ab225bbbdac83319345b1b44ccfc1b"
-
-[[patch.unused]]
-name = "agent-first-terminal"
-version = "0.1.0"
-
-[[patch.unused]]
-name = "agent-first-ui"
-version = "0.2.0"
