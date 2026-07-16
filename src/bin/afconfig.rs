@@ -3,7 +3,7 @@
 use agent_first_config::{ConfigError, ConfigResult, Format, KeyedList, Value};
 use clap::{ArgAction, Parser, Subcommand, error::ErrorKind};
 use std::fs::{self, OpenOptions};
-use std::io::{BufRead, Read, Write};
+use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
 
 #[derive(Parser)]
@@ -495,6 +495,7 @@ fn read_secret_reader<R: std::io::Read>(reader: R, source: &str) -> ConfigResult
 
 #[cfg(unix)]
 fn read_secret_prompt() -> ConfigResult<Vec<String>> {
+    use std::io::BufRead;
     let mut tty = std::fs::OpenOptions::new()
         .read(true)
         .write(true)

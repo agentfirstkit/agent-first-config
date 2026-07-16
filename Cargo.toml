@@ -2,7 +2,7 @@
 name = "agent-first-config"
 version = "0.2.0"
 edition = "2024"
-rust-version = "1.85"
+rust-version = "1.88"
 description = "Generic dot-path accessor for JSON/TOML/YAML/dotenv/INI configs, usable both as a Rust library and as a standalone afconfig CLI binary. The library is the primary interface: spores embed it for generic dot-path access without writing a dispatch table per field. The CLI wraps the same logic for shell scripts and quick one-off reads or edits from any language."
 license = "MIT"
 repository = "https://github.com/agentfirstkit/agent-first-config"
