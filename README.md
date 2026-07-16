@@ -4,25 +4,29 @@ Generic dot-path accessor for JSON/TOML/YAML/dotenv/INI configs, usable both as 
 
 > **Ask your agent:** "Add agent-first-config to my project and use it to read and write my config fields by dot-path."
 
-The default library build enables all five format backends. With `--no-default-features`, add only the independent features you need (`json`, `toml`, `yaml`, `dotenv`, `ini`, `schema`), or install the binary with `--features cli` and never touch Rust at all.
+## Install the Library
 
-The crate declares Rust 1.85 as its MSRV. The same feature matrix, clippy gate,
-CLI tests, forward-validation workflows, and generated-doc check run from
-[`scripts/test.sh`](scripts/test.sh) in the standalone repository.
-
-## Install
-
-Rust library:
+With all library features and no CLI dependencies:
 
 ```bash
-cargo add agent-first-config
+cargo add agent-first-config --no-default-features --features json,toml,yaml,dotenv,ini,schema
 ```
 
-CLI binary (all format backends):
+## Install the CLI
+
+The CLI enables all format backends by default:
 
 ```bash
-cargo add agent-first-config --features cli
+# prebuilt binary
+brew install agentfirstkit/tap/afconfig   # macOS / Linux
+scoop bucket add agentfirstkit https://github.com/agentfirstkit/scoop-bucket && scoop install afconfig   # Windows
+
+# or from crates.io
+cargo install agent-first-config
 ```
+
+Prebuilt archives are also available from
+[GitHub Releases](https://github.com/agentfirstkit/agent-first-config/releases).
 
 ## Core Features
 
@@ -32,7 +36,6 @@ cargo add agent-first-config --features cli
 - **Five format backends**: JSON, TOML, YAML, dotenv, and INI Core v1
 - **Type coercion**: `"true"` → bool, `"993"` → integer, `"[1,2]"` → array; force via `s:`, `b:`, `i:`, `j:` prefixes
 - **Seed defaults**: `add_keyed` accepts an optional template object; explicit fields override seed fields
-- **Feature-gated deps**: zero format deps by default; enable only what you use
 - **Typed adapter**: `from_value`/`to_value` bridge arbitrary serde structs with fallible path-aware errors
 - **Source-preserving mutation**: existing entries keep unrelated JSON/TOML/YAML/dotenv/INI source bytes; unsupported CST shapes return structured errors
 
@@ -100,8 +103,6 @@ The parser accepts blank lines, comments, optional `export`, empty values, unquo
 
 INI uses the conservative INI Core v1 dialect: `[section]` plus `key=value`, exact case-sensitive names, string values, comments only at line start, CRLF preservation, and no interpolation, includes, bare keys, duplicate sections, duplicate entries, or multiline extensions. Mutation errors include format, path, and line/column context without including values.
 
-The dotenv parser is implemented inside this crate and versioned with it. A third-party dotenv parser was intentionally not added because the evaluated parser expands variables from both earlier assignments and the process environment by default; those semantics conflict with this backend's raw, reproducible reads.
-
 See [`docs/cli.md`](docs/cli.md) for the full CLI reference.
 
 ## Traversal Rules
@@ -123,8 +124,6 @@ See [`docs/cli.md`](docs/cli.md) for the full CLI reference.
 | `schema` | `CliSchema` trait + markdown/annotated-config rendering |
 | `cli`    | `afconfig` binary (pulls in clap + agent-first-data) |
 | `cli-help` | Recursive and Markdown CLI help through agent-first-data; used to generate `docs/cli.md` |
-
-No features enabled = zero format deps (traversal and coercion only).
 
 ## License
 

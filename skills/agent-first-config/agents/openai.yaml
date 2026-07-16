@@ -1,4 +1,4 @@
 interface:
   display_name: "Agent-First Config"
-  short_description: "Safely inspect and edit config files"
-  default_prompt: "Use $agent-first-config to inspect or safely modify this configuration while preserving format and protecting secrets."
+  short_description: "Use config library or CLI safely"
+  default_prompt: "Use $agent-first-config to read or safely modify configuration with the Rust library or afconfig CLI while preserving format and protecting secrets."

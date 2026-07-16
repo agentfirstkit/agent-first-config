@@ -18,16 +18,14 @@
   ],
   "license": "MIT",
   "mutations": [
-    "Rework all format mutations to be source-preserving — set/unset/add/remove edit only the addressed span and leave comments, ordering, whitespace, quoting, anchors, and number/datetime spelling byte-identical, or fail before writing.",
-    "Add first-class dotenv and INI Core v1 backends with documented, side-effect-free dialects (string leaves, no variable expansion, no process-environment access).",
-    "Make each config format an independent Cargo feature (json/toml/yaml/dotenv/ini), all enabled by default.",
-    "Add four mutually-exclusive secret write sources (--value-secret, --value-secret-stdin, --value-secret-prompt, --value-secret-fd) that keep the value out of argv, logs, success payloads, and errors.",
-    "Add a global --secret-name to redact exact field names in non-targeted output while a targeted get still returns the requested value.",
-    "Add get --value-only to emit a bare scalar for shell command-substitution under a strict raw-output and exit-status contract.",
-    "Route the whole CLI through Agent-First Data: structured results and errors, --output json|yaml|plain, conventional -V, and predictable exit codes on every path.",
-    "Add a typed serde adapter (from_value/to_value) that validates after mutation with path-aware errors, plus Value::Unsigned for lossless u64 with explicit rejection when a format cannot represent a number.",
-    "Make keyed-list add/remove fully generic via an explicit --slug-field (fixing nested dotted prefixes) and adopt one unambiguous dot-path grammar with backslash escaping for literal dots and backslashes.",
-    "Write files atomically (temp + fsync + rename, preserving mode) and refuse to mutate symlink and hardlink targets; publish an agent-first-config skill and remove the placeholder default/doc/schema commands."
+    "Rework config mutations to preserve untouched source bytes across JSON, TOML, YAML, dotenv, and INI, failing safely when an edit cannot preserve the document",
+    "Add side-effect-free dotenv and INI Core v1 backends alongside independently selectable format features, while shipping the afconfig CLI in the default installation",
+    "Add secure secret input sources and configurable field redaction so sensitive values stay out of arguments, logs, results, and errors",
+    "Add scalar-only shell output and route normal CLI results and failures through consistent Agent-First Data JSON, YAML, and plain formatting",
+    "Add typed serde conversion, lossless unsigned integers, generic keyed-list operations, and an unambiguous escaped dot-path grammar",
+    "Write mutations atomically while preserving file modes and refusing symlink or hardlink targets",
+    "Expand the bundled skill and documentation with Rust library workflows, minimal-feature installation, and source-preserving mutation guidance",
+    "Raise the MSRV to Rust 1.88 and make container, Windows, macOS, feature-matrix, and fixed-entrypoint CI checks reliable"
   ],
   "bonds": [],
   "tree": {

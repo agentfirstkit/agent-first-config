@@ -17,7 +17,10 @@ path = "src/bin/afconfig.rs"
 required-features = ["cli"]
 
 [features]
-default = ["json", "toml", "yaml", "dotenv", "ini"]
+# Batteries included by default: all format backends and the afconfig binary.
+# Library consumers that want a smaller dependency graph can opt out with
+# `default-features = false` and enable only the formats they use.
+default = ["json", "toml", "yaml", "dotenv", "ini", "cli"]
 json = ["dep:serde_json"]
 toml = ["dep:toml", "dep:toml_edit"]
 yaml = ["dep:noyalib"]
@@ -48,7 +51,7 @@ version = "0.25"
 optional = true
 
 [dependencies.noyalib]
-version = "0.0.13"
+version = "0.0.15"
 features = ["lossless-u64"]
 optional = true
 
@@ -58,7 +61,7 @@ features = ["derive"]
 optional = true
 
 [dependencies.agent-first-data]
-version = "0.17.2"
+version = "0.17.3"
 optional = true
 
 [dev-dependencies]
@@ -71,3 +74,6 @@ expect_used = "deny"
 panic = "deny"
 print_stdout = "deny"
 print_stderr = "deny"
+# Style-only lint that newer clippy defaults to allow; the MSRV (1.88) clippy
+# still warns on `"{}", x` vs `"{x}"`. Keep it off to avoid version-skew churn.
+uninlined_format_args = "allow"
