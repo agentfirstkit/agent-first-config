@@ -1,4 +1,15 @@
-# Agent-First Config
+# Agent-First Config — RETIRED
+
+> **⚠️ This project is retired and this repository is archived (read-only).**
+>
+> `agent-first-config` has been folded into
+> **[agent-first-data](https://github.com/agentfirstkit/agent-first-data)**. Its
+> document read/edit layer now lives at `agent_first_data::document` (Rust) and in
+> the `afdata` CLI (`afdata get` / `value` / `paths` / `keys` / `set` / `unset` /
+> `add` / `remove`). No further releases will be made here; the crates.io
+> releases are being yanked. Migrate to `agent-first-data`.
+
+---
 
 Generic dot-path accessor for JSON/TOML/YAML/dotenv/INI configs, usable both as a Rust library and as a standalone afconfig CLI binary. The library is the primary interface: spores embed it for generic dot-path access without writing a dispatch table per field. The CLI wraps the same logic for shell scripts and quick one-off reads or edits from any language.
 
